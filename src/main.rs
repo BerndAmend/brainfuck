@@ -1,11 +1,40 @@
+#![feature(test)]
+
+extern crate test;
+
 use std::io::prelude::*;
 use std::fs::File;
+
+pub trait InputOutput {
+    fn read(&mut self) -> Option<char>;
+    fn write(&mut self, ch: char);
+}
+
+pub struct DummyIntputOutput;
+impl InputOutput for DummyIntputOutput {
+    fn read(&mut self) -> Option<char> {
+        None
+    }
+    fn write(&mut self, ch: char) {
+    }
+}
+
+pub struct ConsoleIntputOutput;
+impl InputOutput for ConsoleIntputOutput {
+    fn read(&mut self) -> Option<char> {
+        None
+    }
+    fn write(&mut self, ch: char) {
+        print!("{}", ch);
+    }
+}
 
 #[derive(Clone,Copy, Debug)]
 enum Ops {
     Move(isize),
     Mod(i8),
     Print,
+    Read,
     LoopOpen(usize),
     LoopClose(usize),
     SetCell(i8),
@@ -36,7 +65,7 @@ fn compile(source: &str) -> Result<Vec<Ops>, String> {
             '-' => Ops::Mod(-1),
             '+' => Ops::Mod(1),
             '.' => Ops::Print,
-            ',' => return Err(", is not implemented".into()),
+            ',' => Ops::Read,
             '[' => Ops::LoopOpen(0),
             ']' => Ops::LoopClose(0),
             'Z' => Ops::SetCell(0),
@@ -95,7 +124,7 @@ fn compile(source: &str) -> Result<Vec<Ops>, String> {
     }
 }
 
-fn execute(ops: &Vec<Ops>) {
+fn execute(ops: &Vec<Ops>, in_out: &mut InputOutput) {
     let ops = &ops[..];
     let mut memory = [0i8; 30000];
     let mut pos: usize = 0;
@@ -105,7 +134,8 @@ fn execute(ops: &Vec<Ops>) {
         match ops[ip] {
             Ops::Move(val) => pos = ((pos as isize) + val) as usize,
             Ops::Mod(val) => memory[pos] = memory[pos].wrapping_add(val),
-            Ops::Print => print!("{}", memory[pos] as u8 as char),
+            Ops::Print => in_out.write(memory[pos] as u8 as char),
+            Ops::Read => memory[pos] = in_out.read().unwrap() as i8,
             Ops::LoopOpen(end) => {
                 if memory[pos] == 0 {
                     ip = end;
@@ -129,17 +159,36 @@ fn execute(ops: &Vec<Ops>) {
     }
 }
 
-fn main() {
-    let mut f = File::open(std::env::args().nth(1).unwrap()).unwrap();
+pub fn run(filename: &str, in_out: &mut InputOutput) {
+    let mut f = File::open(filename).unwrap();
     let mut source = String::new();
     f.read_to_string(&mut source).unwrap();
 
     match compile(&source) {
         Ok(ops) => {
             // println!("{:?}", ops);
-            execute(&ops)
+            execute(&ops, in_out)
         }
         Err(msg) => println!("Compilation error {}", msg),
     }
+}
+
+fn main() {
+    let mut in_out = ConsoleIntputOutput {};
+    run(&std::env::args().nth(1).unwrap(), &mut in_out);
     println!("\nDone");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test::Bencher;
+
+     #[bench]
+    fn mandelbrot(b: &mut Bencher) {
+        b.iter(|| {
+            let mut in_out = DummyIntputOutput {};
+            run("programs/mandelbrot.bf", &mut in_out);
+        });
+    }
 }
