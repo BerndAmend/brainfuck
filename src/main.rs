@@ -1,50 +1,90 @@
 use std::io::prelude::*;
 use std::fs::File;
 
-#[derive(Clone)]
+#[derive(Clone,Copy, Debug)]
 enum Ops {
-    Right,
-    Left,
-    Incr,
-    Decr,
+    Move(isize),
+    Mod(i8),
     Print,
-    LoopOpen{end: usize},
-    LoopClose{start: usize},
+    LoopOpen(usize),
+    LoopClose(usize),
+    SetCell(i8),
+    SearchZeroCell(isize), // stores the stepwith
     End,
+    NoOp,
 }
 
 fn compile(source: &str) -> Result<Vec<Ops>, String> {
-    let source = source.chars().filter(|x| match *x {
-        '>' | '<' | '+' | '-' | '.' | ',' | '[' | ']' => true,
-        _ => false
-        }).collect::<Vec<_>>();
+    let source: String = source.chars()
+                               .filter(|x| {
+                                   match *x {
+                                       '>' | '<' | '+' | '-' | '.' | ',' | '[' | ']' => true,
+                                       _ => false,
+                                   }
+                               })
+                               .collect();
+    let source = source.replace("[-]", "Z").replace("[<<<<<<<<<]", "L").replace("[>>>>>>>>>]", "R");
     let mut compiled = vec![];
-    compiled.reserve(source.len()+1);
 
-    let mut stack: Vec<usize> = vec![];
+    let mut next_op = Ops::NoOp;
+    let mut previous = ' ';
+    for token in source.chars() {
 
-    for i in 0..source.len() {
-        let new_op = match source[i] {
-            '>'	=> Ops::Right,
-            '<'	=> Ops::Left,
-            '+'	=> Ops::Incr,
-            '-'	=> Ops::Decr,
-            '.'	=> Ops::Print,
-            ','	=> return Err(", is not implemented".into()),
-            '['	=> {
-                    stack.push(i);
-                    Ops::LoopOpen{end: 0}
-                    },
-            ']'	=> match stack.pop() {
-                        Some(start_pos) => {
-                            compiled[start_pos] = Ops::LoopOpen{ end: i };
-                            Ops::LoopClose{start: start_pos}
-                        },
-                        None => return Err("missing [ for ]".into()),
-                    },
+        let current_op = match token {
+            '<' => Ops::Move(-1),
+            '>' => Ops::Move(1),
+            '-' => Ops::Mod(-1),
+            '+' => Ops::Mod(1),
+            '.' => Ops::Print,
+            ',' => return Err(", is not implemented".into()),
+            '[' => Ops::LoopOpen(0),
+            ']' => Ops::LoopClose(0),
+            'Z' => Ops::SetCell(0),
+            'L' => Ops::SearchZeroCell(-9),
+            'R' => Ops::SearchZeroCell(9),
             _ => unreachable!(),
         };
-        compiled.push(new_op);
+
+        if previous == token {
+            next_op = match (current_op, next_op) {
+                (Ops::Move(v1), Ops::Move(v2)) => Ops::Move(v1 + v2),
+                (Ops::Mod(v1), Ops::Mod(v2)) => Ops::Mod(v1 + v2),
+                (Ops::SetCell(0), Ops::Mod(v)) => Ops::SetCell(v),
+                _ => {
+                    compiled.push(next_op);
+                    current_op
+                }
+            }
+        } else {
+            compiled.push(next_op);
+            next_op = current_op;
+        }
+
+        previous = token;
+    }
+
+    compiled.push(next_op);
+
+    // find search zero cell commands
+
+    // calculate all loop jump destinations
+    let mut stack: Vec<usize> = vec![];
+    for i in 0..compiled.len() {
+        match compiled[i] {
+            Ops::LoopOpen(_) => stack.push(i),
+            Ops::LoopClose(_) => {
+                match stack.pop() {
+                    Some(start_pos) => {
+                        compiled[start_pos] = Ops::LoopOpen(i);
+                        compiled[i] = Ops::LoopClose(start_pos)
+                    }
+                    None => return Err("missing [ for ]".into()),
+                }
+            }
+            _ => {
+                // not relevant for this optimization
+            }
+        };
     }
 
     if stack.len() > 0 {
@@ -63,30 +103,43 @@ fn execute(ops: &Vec<Ops>) {
 
     'main: loop {
         match ops[ip] {
-            Ops::Right => pos += 1,
-            Ops::Left => pos -= 1,
-            Ops::Incr => memory[pos] = memory[pos].wrapping_add(1),
-            Ops::Decr => memory[pos] = memory[pos].wrapping_sub(1),
+            Ops::Move(val) => pos = ((pos as isize) + val) as usize,
+            Ops::Mod(val) => memory[pos] = memory[pos].wrapping_add(val),
             Ops::Print => print!("{}", memory[pos] as u8 as char),
-            Ops::LoopOpen{end} => if memory[pos] == 0 { ip = end; },
-            Ops::LoopClose{start} => if memory[pos] != 0 { ip = start; },
+            Ops::LoopOpen(end) => {
+                if memory[pos] == 0 {
+                    ip = end;
+                }
+            }
+            Ops::LoopClose(start) => {
+                if memory[pos] != 0 {
+                    ip = start;
+                }
+            }
+            Ops::SetCell(value) => memory[pos] = value,
+            Ops::SearchZeroCell(step) => {
+                while memory[pos] != 0 {
+                    pos = ((pos as isize) + step) as usize;
+                }
+            }
             Ops::End => break 'main,
+            Ops::NoOp => {}
         };
         ip += 1;
     }
 }
 
-fn run(source: &str) {
-    match compile(source) {
-        Ok(ops) => execute(&ops),
-        Err(msg) => println!("Compilation error {}", msg),
-    }
-}
-
 fn main() {
     let mut f = File::open(std::env::args().nth(1).unwrap()).unwrap();
-    let mut s = String::new();
-    f.read_to_string(&mut s).unwrap();
-    run(&s);
+    let mut source = String::new();
+    f.read_to_string(&mut source).unwrap();
+
+    match compile(&source) {
+        Ok(ops) => {
+            // println!("{:?}", ops);
+            execute(&ops)
+        }
+        Err(msg) => println!("Compilation error {}", msg),
+    }
     println!("\nDone");
 }
