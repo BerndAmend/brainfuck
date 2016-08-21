@@ -40,61 +40,64 @@ enum Ops {
     SetCell(i8),
     SearchZeroCell(isize), // stores the stepwith
     End,
-    NoOp,
 }
 
 fn compile(source: &str) -> Result<Vec<Ops>, String> {
-    let source: String = source.chars()
-                               .filter(|x| {
-                                   match *x {
-                                       '>' | '<' | '+' | '-' | '.' | ',' | '[' | ']' => true,
-                                       _ => false,
-                                   }
-                               })
-                               .collect();
-    let source = source.replace("[-]", "Z").replace("[<<<<<<<<<]", "L").replace("[>>>>>>>>>]", "R");
-    let mut compiled = vec![];
+    let converted = source.chars()
+                        .filter_map(|token| {
+                            match token {
+                                '<' => Some(Ops::Move(-1)),
+                                '>' => Some(Ops::Move(1)),
+                                '-' => Some(Ops::Mod(-1)),
+                                '+' => Some(Ops::Mod(1)),
+                                '.' => Some(Ops::Print),
+                                ',' => Some(Ops::Read),
+                                '[' => Some(Ops::LoopOpen(0)),
+                                ']' => Some(Ops::LoopClose(0)),
+                                _ => None,
+                            }
+                        });
 
-    let mut next_op = Ops::NoOp;
-    let mut previous = ' ';
-    for token in source.chars() {
-
-        let current_op = match token {
-            '<' => Ops::Move(-1),
-            '>' => Ops::Move(1),
-            '-' => Ops::Mod(-1),
-            '+' => Ops::Mod(1),
-            '.' => Ops::Print,
-            ',' => Ops::Read,
-            '[' => Ops::LoopOpen(0),
-            ']' => Ops::LoopClose(0),
-            'Z' => Ops::SetCell(0),
-            'L' => Ops::SearchZeroCell(-9),
-            'R' => Ops::SearchZeroCell(9),
-            _ => unreachable!(),
-        };
-
-        if previous == token {
-            next_op = match (current_op, next_op) {
-                (Ops::Move(v1), Ops::Move(v2)) => Ops::Move(v1 + v2),
-                (Ops::Mod(v1), Ops::Mod(v2)) => Ops::Mod(v1 + v2),
-                (Ops::SetCell(0), Ops::Mod(v)) => Ops::SetCell(v),
+    // Optimize
+    let mut compiled = Vec::new();
+    {
+        let mut prepre = None;
+        let mut pre = None;
+        for cur in converted {
+            match (prepre, pre, cur) {
+                (_, Some(Ops::Move(v1)), Ops::Move(v2)) => {
+                    pre = Some(Ops::Move(v1 + v2));
+                },
+                (_, Some(Ops::Mod(v1)), Ops::Mod(v2)) => {
+                    pre = Some(Ops::Mod(v1 + v2));
+                },
+                (Some(Ops::LoopOpen(_)), Some(Ops::Mod(-1)), Ops::LoopClose(_)) => {
+                    prepre = None;
+                    pre = Some(Ops::SetCell(0));
+                },
+                (Some(Ops::LoopOpen(_)), Some(Ops::Move(n)), Ops::LoopClose(_)) => {
+                    prepre = None;
+                    pre = Some(Ops::SearchZeroCell(n));
+                },
+                (_, Some(Ops::SetCell(0)), Ops::Mod(v)) => {
+                    pre = Some(Ops::SetCell(v));
+                },
                 _ => {
-                    compiled.push(next_op);
-                    current_op
-                }
-            }
-        } else {
-            compiled.push(next_op);
-            next_op = current_op;
+                    if let Some(o) = prepre {
+                        compiled.push(o);
+                    }
+                    prepre = pre;
+                    pre = Some(cur);
+                },
+            };
         }
-
-        previous = token;
+        if let Some(o) = prepre {
+            compiled.push(o);
+        }
+        if let Some(o) = pre {
+            compiled.push(o);
+        }
     }
-
-    compiled.push(next_op);
-
-    // find search zero cell commands
 
     // calculate all loop jump destinations
     let mut stack: Vec<usize> = vec![];
@@ -116,16 +119,15 @@ fn compile(source: &str) -> Result<Vec<Ops>, String> {
         };
     }
 
-    if stack.len() > 0 {
-        Err("missing ] for [".into())
-    } else {
+    if stack.is_empty() {
         compiled.push(Ops::End);
         Ok(compiled)
+    } else {
+        Err("missing ] for [".into())
     }
 }
 
-fn execute(ops: &Vec<Ops>, in_out: &mut InputOutput) {
-    let ops = &ops[..];
+fn execute(ops: &[Ops], in_out: &mut InputOutput) {
     let mut memory = [0i8; 30000];
     let mut pos: usize = 0;
     let mut ip: usize = 0;
@@ -134,8 +136,6 @@ fn execute(ops: &Vec<Ops>, in_out: &mut InputOutput) {
         match ops[ip] {
             Ops::Move(val) => pos = ((pos as isize) + val) as usize,
             Ops::Mod(val) => memory[pos] = memory[pos].wrapping_add(val),
-            Ops::Print => in_out.write(memory[pos] as u8 as char),
-            Ops::Read => memory[pos] = in_out.read().unwrap() as i8,
             Ops::LoopOpen(end) => {
                 if memory[pos] == 0 {
                     ip = end;
@@ -152,8 +152,9 @@ fn execute(ops: &Vec<Ops>, in_out: &mut InputOutput) {
                     pos = ((pos as isize) + step) as usize;
                 }
             }
+            Ops::Print => in_out.write(memory[pos] as u8 as char),
+            Ops::Read => memory[pos] = in_out.read().unwrap() as i8,
             Ops::End => break 'main,
-            Ops::NoOp => {}
         };
         ip += 1;
     }
