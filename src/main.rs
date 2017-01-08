@@ -15,7 +15,7 @@ impl InputOutput for DummyIntputOutput {
     fn read(&mut self) -> Option<char> {
         None
     }
-    fn write(&mut self, ch: char) {
+    fn write(&mut self, _: char) {
     }
 }
 
@@ -29,16 +29,16 @@ impl InputOutput for ConsoleIntputOutput {
     }
 }
 
-#[derive(Clone,Copy, Debug)]
+#[derive(Clone,Copy,Debug)]
 enum Ops {
     Move(isize),
     Mod(i8),
-    Print,
-    Read,
     LoopOpen(usize),
     LoopClose(usize),
     SetCell(i8),
-    SearchZeroCell(isize), // stores the stepwith
+    SearchZeroCell(isize), // stores the step with
+    Print,
+    Read,
     End,
 }
 
@@ -105,12 +105,11 @@ fn compile(source: &str) -> Result<Vec<Ops>, String> {
         match compiled[i] {
             Ops::LoopOpen(_) => stack.push(i),
             Ops::LoopClose(_) => {
-                match stack.pop() {
-                    Some(start_pos) => {
-                        compiled[start_pos] = Ops::LoopOpen(i);
-                        compiled[i] = Ops::LoopClose(start_pos)
-                    }
-                    None => return Err("missing [ for ]".into()),
+                if let Some(start_pos) = stack.pop() {
+                    compiled[start_pos] = Ops::LoopOpen(i);
+                    compiled[i] = Ops::LoopClose(start_pos);
+                } else {
+                    return Err("missing [ for ]".into());
                 }
             }
             _ => {
