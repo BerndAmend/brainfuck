@@ -10,17 +10,16 @@ pub trait InputOutput {
     fn write(&mut self, ch: char);
 }
 
-pub struct DummyIntputOutput;
-impl InputOutput for DummyIntputOutput {
+pub struct DummyInputOutput;
+impl InputOutput for DummyInputOutput {
     fn read(&mut self) -> Option<char> {
         None
     }
-    fn write(&mut self, _: char) {
-    }
+    fn write(&mut self, _: char) {}
 }
 
-pub struct ConsoleIntputOutput;
-impl InputOutput for ConsoleIntputOutput {
+pub struct ConsoleInputOutput;
+impl InputOutput for ConsoleInputOutput {
     fn read(&mut self) -> Option<char> {
         None
     }
@@ -43,20 +42,19 @@ enum Ops {
 }
 
 fn compile(source: &str) -> Result<Vec<Ops>, String> {
-    let converted = source.chars()
-                        .filter_map(|token| {
-                            match token {
-                                '<' => Some(Ops::Move(-1)),
-                                '>' => Some(Ops::Move(1)),
-                                '-' => Some(Ops::Mod(-1)),
-                                '+' => Some(Ops::Mod(1)),
-                                '.' => Some(Ops::Print),
-                                ',' => Some(Ops::Read),
-                                '[' => Some(Ops::LoopOpen(0)),
-                                ']' => Some(Ops::LoopClose(0)),
-                                _ => None,
-                            }
-                        });
+    let converted = source
+        .chars()
+        .filter_map(|token| match token {
+                        '<' => Some(Ops::Move(-1)),
+                        '>' => Some(Ops::Move(1)),
+                        '-' => Some(Ops::Mod(-1)),
+                        '+' => Some(Ops::Mod(1)),
+                        '.' => Some(Ops::Print),
+                        ',' => Some(Ops::Read),
+                        '[' => Some(Ops::LoopOpen(0)),
+                        ']' => Some(Ops::LoopClose(0)),
+                        _ => None,
+                    });
 
     // Optimize
     let mut compiled = Vec::new();
@@ -67,28 +65,28 @@ fn compile(source: &str) -> Result<Vec<Ops>, String> {
             match (prepre, pre, cur) {
                 (_, Some(Ops::Move(v1)), Ops::Move(v2)) => {
                     pre = Some(Ops::Move(v1 + v2));
-                },
+                }
                 (_, Some(Ops::Mod(v1)), Ops::Mod(v2)) => {
                     pre = Some(Ops::Mod(v1 + v2));
-                },
+                }
                 (Some(Ops::LoopOpen(_)), Some(Ops::Mod(-1)), Ops::LoopClose(_)) => {
                     prepre = None;
                     pre = Some(Ops::SetCell(0));
-                },
+                }
                 (Some(Ops::LoopOpen(_)), Some(Ops::Move(n)), Ops::LoopClose(_)) => {
                     prepre = None;
                     pre = Some(Ops::SearchZeroCell(n));
-                },
+                }
                 (_, Some(Ops::SetCell(0)), Ops::Mod(v)) => {
                     pre = Some(Ops::SetCell(v));
-                },
+                }
                 _ => {
                     if let Some(o) = prepre {
                         compiled.push(o);
                     }
                     prepre = pre;
                     pre = Some(cur);
-                },
+                }
             };
         }
         if let Some(o) = prepre {
@@ -174,7 +172,7 @@ pub fn run(filename: &str, in_out: &mut InputOutput) {
 }
 
 fn main() {
-    let mut in_out = ConsoleIntputOutput {};
+    let mut in_out = ConsoleInputOutput {};
     run(&std::env::args().nth(1).unwrap(), &mut in_out);
     println!("\nDone");
 }
@@ -184,11 +182,11 @@ mod tests {
     use super::*;
     use test::Bencher;
 
-     #[bench]
+    #[bench]
     fn mandelbrot(b: &mut Bencher) {
         b.iter(|| {
-            let mut in_out = DummyIntputOutput {};
-            run("programs/mandelbrot.bf", &mut in_out);
-        });
+                   let mut in_out = DummyInputOutput {};
+                   run("programs/mandelbrot.bf", &mut in_out);
+               });
     }
 }
