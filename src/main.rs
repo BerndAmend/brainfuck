@@ -1,7 +1,3 @@
-#![feature(test)]
-
-extern crate test;
-
 use std::io::prelude::*;
 use std::fs::File;
 
@@ -10,12 +6,31 @@ pub trait InputOutput {
     fn write(&mut self, ch: char);
 }
 
+// Used for Benchmarks
 pub struct DummyInputOutput;
 impl InputOutput for DummyInputOutput {
     fn read(&mut self) -> Option<char> {
         None
     }
     fn write(&mut self, _: char) {}
+}
+
+// Used for tests
+pub struct StringInputOutput {
+    output: String,
+}
+impl StringInputOutput {
+    fn new() -> StringInputOutput {
+        StringInputOutput { output: String::new() }
+    }
+}
+impl InputOutput for StringInputOutput {
+    fn read(&mut self) -> Option<char> {
+        None
+    }
+    fn write(&mut self, ch: char) {
+        self.output.push(ch);
+    }
 }
 
 pub struct ConsoleInputOutput;
@@ -28,7 +43,7 @@ impl InputOutput for ConsoleInputOutput {
     }
 }
 
-#[derive(Clone,Copy,Debug)]
+#[derive(Clone, Copy, Debug)]
 enum Ops {
     Move(isize),
     Mod(i8),
@@ -42,19 +57,17 @@ enum Ops {
 }
 
 fn compile(source: &str) -> Result<Vec<Ops>, String> {
-    let converted = source
-        .chars()
-        .filter_map(|token| match token {
-                        '<' => Some(Ops::Move(-1)),
-                        '>' => Some(Ops::Move(1)),
-                        '-' => Some(Ops::Mod(-1)),
-                        '+' => Some(Ops::Mod(1)),
-                        '.' => Some(Ops::Print),
-                        ',' => Some(Ops::Read),
-                        '[' => Some(Ops::LoopOpen(0)),
-                        ']' => Some(Ops::LoopClose(0)),
-                        _ => None,
-                    });
+    let converted = source.chars().filter_map(|token| match token {
+        '<' => Some(Ops::Move(-1)),
+        '>' => Some(Ops::Move(1)),
+        '-' => Some(Ops::Mod(-1)),
+        '+' => Some(Ops::Mod(1)),
+        '.' => Some(Ops::Print),
+        ',' => Some(Ops::Read),
+        '[' => Some(Ops::LoopOpen(0)),
+        ']' => Some(Ops::LoopClose(0)),
+        _ => None,
+    });
 
     // Optimize
     let mut compiled = Vec::new();
@@ -180,13 +193,15 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use test::Bencher;
 
-    #[bench]
-    fn mandelbrot(b: &mut Bencher) {
-        b.iter(|| {
-                   let mut in_out = DummyInputOutput {};
-                   run("programs/mandelbrot.bf", &mut in_out);
-               });
+    #[test]
+    fn mandelbrot() {
+        let filename = "programs/mandelbrot";
+        let mut in_out = StringInputOutput::new();
+        run(&format!("{}.bf", filename), &mut in_out);
+        let mut f = File::open(&format!("{}.out", filename)).unwrap();
+        let mut source = String::new();
+        f.read_to_string(&mut source).unwrap();
+        assert_eq!(source, in_out.output);
     }
 }
