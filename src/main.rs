@@ -1,5 +1,6 @@
-use std::io::prelude::*;
+#![deny(bare_trait_objects)]
 use std::fs::File;
+use std::io::prelude::*;
 
 pub trait InputOutput {
     fn read(&mut self) -> Option<char>;
@@ -21,7 +22,9 @@ pub struct StringInputOutput {
 }
 impl StringInputOutput {
     fn new() -> StringInputOutput {
-        StringInputOutput { output: String::new() }
+        StringInputOutput {
+            output: String::new(),
+        }
     }
 }
 impl InputOutput for StringInputOutput {
@@ -137,7 +140,7 @@ fn compile(source: &str) -> Result<Vec<Ops>, String> {
     }
 }
 
-fn execute(ops: &[Ops], in_out: &mut InputOutput) {
+fn execute(ops: &[Ops], in_out: &mut dyn InputOutput) {
     let mut memory = [0i8; 30000];
     let mut pos: usize = 0;
     let mut ip: usize = 0;
@@ -170,7 +173,7 @@ fn execute(ops: &[Ops], in_out: &mut InputOutput) {
     }
 }
 
-pub fn run(filename: &str, in_out: &mut InputOutput) {
+pub fn run(filename: &str, in_out: &mut dyn InputOutput) {
     let mut f = File::open(filename).unwrap();
     let mut source = String::new();
     f.read_to_string(&mut source).unwrap();
