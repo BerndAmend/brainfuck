@@ -4,3 +4,8 @@ version = "1.0.0"
 authors = ["Bernd Amend <bernd.amend@gmail.com>"]
 edition = '2018'
 
+[build]
+rustflags = ["-C", "target-cpu=native"]
+
+#[profile.release]
+#debug = true
