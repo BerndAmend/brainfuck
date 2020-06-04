@@ -141,7 +141,7 @@ fn compile(source: &str) -> Result<Vec<Ops>, String> {
 }
 
 fn execute(ops: &[Ops], in_out: &mut dyn InputOutput) {
-    let mut memory = [0i8; 30000];
+    let mut memory = vec![0i8; 30000]; // a vec is much faster than a normal array
     let mut pos: usize = 0;
     let mut ip: usize = 0;
 
