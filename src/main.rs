@@ -173,9 +173,10 @@ fn execute(ops: &[Ops], in_out: &mut dyn InputOutput) {
 }
 
 pub fn run(filename: &str, in_out: &mut dyn InputOutput) {
-    let mut f = File::open(filename).unwrap();
-    let mut source = String::new();
-    f.read_to_string(&mut source).unwrap();
+    let mut file = File::open(filename).unwrap();
+    let mut source =
+        String::with_capacity(file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0));
+    file.read_to_string(&mut source).unwrap();
 
     match compile(&source) {
         Ok(ops) => {
