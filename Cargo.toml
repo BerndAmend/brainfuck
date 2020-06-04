@@ -2,3 +2,5 @@
 name = "brainfuck"
 version = "1.0.0"
 authors = ["Bernd Amend <bernd.amend@gmail.com>"]
+edition = '2018'
+
